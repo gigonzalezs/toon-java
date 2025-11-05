@@ -42,7 +42,6 @@ import org.toonjava.ToonDecoder;
 import org.toonjava.ToonObject;
 
 String toonText = """
-@object
 name: "Toon Java"
 version: 1.0
 features:
