@@ -539,6 +539,9 @@ public final class ToonTokener {
   }
 
   private static Object parsePrimitive(String text, int line, int column) {
+    if (text.startsWith("\"") && !isQuoted(text)) {
+      throw new ToonException("Cadena sin cerrar", line, column + text.length());
+    }
     if (text.equals("null")) {
       return null;
     }
