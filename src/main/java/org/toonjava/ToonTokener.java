@@ -16,13 +16,19 @@ import org.toonjava.grammar.ToonParser;
  * y objetos multi-línea dentro de arrays.
  */
 public final class ToonTokener {
-  private static final int INDENT_SIZE = 2;
-
   private final List<LineInfo> lines;
+  private final ToonDecoderOptions options;
+  private final int indentSize;
   private int index = 0;
 
   public ToonTokener(String source) {
+    this(source, ToonDecoderOptions.defaults());
+  }
+
+  public ToonTokener(String source, ToonDecoderOptions options) {
     Objects.requireNonNull(source, "source");
+    this.options = Objects.requireNonNull(options, "options");
+    this.indentSize = options.indent();
     this.lines = normalizeLines(source);
   }
 
@@ -40,7 +46,7 @@ public final class ToonTokener {
     HeaderLine headerLine = parseHeaderLine(current);
     if (headerLine != null && headerLine.header.key == null) {
       consumeLine();
-      return readArray(headerLine, current.indent + INDENT_SIZE);
+      return readArray(headerLine, current.indent + indentSize);
     }
     if (!current.trimmed.contains(":") || isQuoted(current.trimmed)) {
       consumeLine();
@@ -69,7 +75,7 @@ public final class ToonTokener {
       throw error("Se esperaba encabezado de array en la posición actual", current.lineNumber, 1);
     }
     consumeLine();
-    return readArray(headerLine, current.indent + INDENT_SIZE);
+    return readArray(headerLine, current.indent + indentSize);
   }
 
   private Map<String, Object> readObject(int expectedIndent) {
@@ -105,7 +111,7 @@ public final class ToonTokener {
               "Los encabezados de array dentro de objetos requieren una clave", line.lineNumber, 1);
         }
         consumeLine();
-        target.put(headerLine.header.key, readArray(headerLine, expectedIndent + INDENT_SIZE));
+        target.put(headerLine.header.key, readArray(headerLine, expectedIndent + indentSize));
         readObjectEntries(target, expectedIndent);
         allowIndentAdjustment = false;
         continue;
@@ -114,7 +120,7 @@ public final class ToonTokener {
       consumeLine();
       ParsedKeyValue kv = parseKeyValue(line.trimmed, line.lineNumber, line.indent + 1);
       if (kv.valueSegment.isEmpty()) {
-        target.put(kv.key, readObject(expectedIndent + INDENT_SIZE));
+        target.put(kv.key, readObject(expectedIndent + indentSize));
       } else {
         target.put(kv.key, parsePrimitive(kv.valueSegment, line.lineNumber, kv.valueColumn));
       }
@@ -151,10 +157,14 @@ public final class ToonTokener {
         break;
       }
       if (line.trimmed.isEmpty()) {
-        throw error(
-            "Las líneas en blanco dentro de arrays no son válidas en modo estricto",
-            line.lineNumber,
-            line.indent + 1);
+        if (options.strict()) {
+          throw error(
+              "Las líneas en blanco dentro de arrays no son válidas en modo estricto",
+              line.lineNumber,
+              line.indent + 1);
+        }
+        consumeLine();
+        continue;
       }
 
       if (header.isTabular()) {
@@ -194,11 +204,11 @@ public final class ToonTokener {
 
       HeaderLine nestedHeaderLine = parseHeaderText(payload, line.lineNumber, line.indent + 3);
       if (nestedHeaderLine != null) {
-        List<Object> nested = readArray(nestedHeaderLine, expectedIndent + INDENT_SIZE);
+        List<Object> nested = readArray(nestedHeaderLine, expectedIndent + indentSize);
         if (nestedHeaderLine.header.key != null) {
           Map<String, Object> inline = new LinkedHashMap<>();
           inline.put(nestedHeaderLine.header.key, nested);
-          readObjectEntries(inline, expectedIndent + INDENT_SIZE);
+          readObjectEntries(inline, expectedIndent + indentSize);
           items.add(inline);
         } else {
           items.add(nested);
@@ -210,11 +220,11 @@ public final class ToonTokener {
         Map<String, Object> inline = new LinkedHashMap<>();
         ParsedKeyValue kv = parseKeyValue(payload, line.lineNumber, line.indent + 3);
         if (kv.valueSegment.isEmpty()) {
-          inline.put(kv.key, readObject(expectedIndent + INDENT_SIZE));
+          inline.put(kv.key, readObject(expectedIndent + indentSize));
         } else {
           inline.put(kv.key, parsePrimitive(kv.valueSegment, line.lineNumber, kv.valueColumn));
         }
-        readObjectEntries(inline, expectedIndent + INDENT_SIZE);
+        readObjectEntries(inline, expectedIndent + indentSize);
         items.add(inline);
       } else {
         items.add(parsePrimitive(payload, line.lineNumber, line.indent + 3));
@@ -507,33 +517,37 @@ public final class ToonTokener {
     return index < lines.size() ? lines.get(index).lineNumber : lines.size();
   }
 
-  private static List<LineInfo> normalizeLines(String source) {
+  private List<LineInfo> normalizeLines(String source) {
     String[] rawLines = source.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1);
     List<LineInfo> result = new ArrayList<>(rawLines.length);
     int lineNumber = 1;
     for (String raw : rawLines) {
-      int indent = countIndent(raw, lineNumber);
-      result.add(new LineInfo(raw, raw.trim(), indent, lineNumber));
+      String trimmed = raw.trim();
+      int indent = countIndent(raw, trimmed, lineNumber);
+      result.add(new LineInfo(raw, trimmed, indent, lineNumber));
       lineNumber++;
     }
     return result;
   }
 
-  private static int countIndent(String raw, int lineNumber) {
+  private int countIndent(String raw, String trimmed, int lineNumber) {
     int count = 0;
     for (char ch : raw.toCharArray()) {
       if (ch == ' ') {
         count++;
       } else if (ch == '\t') {
-        throw new ToonException(
-            "La indentación con tabuladores no está permitida", lineNumber, count + 1);
+        if (options.strict()) {
+          throw new ToonException(
+              "La indentación con tabuladores no está permitida", lineNumber, count + 1);
+        }
+        // En modo no estricto, los tabuladores se ignoran en el conteo de indentación.
       } else {
         break;
       }
     }
-    if (count % INDENT_SIZE != 0) {
+    if (options.strict() && !trimmed.isEmpty() && count % indentSize != 0) {
       throw new ToonException(
-          "Indentación no válida, se esperaba múltiplo de " + INDENT_SIZE, lineNumber, count + 1);
+          "Indentación no válida, se esperaba múltiplo de " + indentSize, lineNumber, count + 1);
     }
     return count;
   }

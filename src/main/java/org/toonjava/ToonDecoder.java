@@ -15,7 +15,11 @@ public final class ToonDecoder {
   private final ToonTokener tokener;
 
   public ToonDecoder(String source) {
-    this(new ToonTokener(source));
+    this(source, ToonDecoderOptions.defaults());
+  }
+
+  public ToonDecoder(String source, ToonDecoderOptions options) {
+    this(new ToonTokener(source, options));
   }
 
   public ToonDecoder(ToonTokener tokener) {
@@ -39,7 +43,11 @@ public final class ToonDecoder {
   }
 
   public static Object decode(String source) {
-    ToonDecoder decoder = new ToonDecoder(source);
+    return decode(source, ToonDecoderOptions.defaults());
+  }
+
+  public static Object decode(String source, ToonDecoderOptions options) {
+    ToonDecoder decoder = new ToonDecoder(source, options);
     Object value = decoder.nextValue();
     if (decoder.hasMoreValues()) {
       throw new ToonException("Se encontraron valores adicionales después del valor principal");
@@ -48,7 +56,11 @@ public final class ToonDecoder {
   }
 
   public static ToonObject decodeObject(String source) {
-    Object value = decode(source);
+    return decodeObject(source, ToonDecoderOptions.defaults());
+  }
+
+  public static ToonObject decodeObject(String source, ToonDecoderOptions options) {
+    Object value = decode(source, options);
     if (value instanceof ToonObject object) {
       return object;
     }
@@ -56,7 +68,11 @@ public final class ToonDecoder {
   }
 
   public static ToonArray decodeArray(String source) {
-    Object value = decode(source);
+    return decodeArray(source, ToonDecoderOptions.defaults());
+  }
+
+  public static ToonArray decodeArray(String source, ToonDecoderOptions options) {
+    Object value = decode(source, options);
     if (value instanceof ToonArray array) {
       return array;
     }
@@ -64,7 +80,11 @@ public final class ToonDecoder {
   }
 
   public static Map<String, Object> decodeToMap(String source) {
-    return decodeObject(source).toMap();
+    return decodeToMap(source, ToonDecoderOptions.defaults());
+  }
+
+  public static Map<String, Object> decodeToMap(String source, ToonDecoderOptions options) {
+    return decodeObject(source, options).toMap();
   }
 
   public static Object toJavaValue(Object value) {
