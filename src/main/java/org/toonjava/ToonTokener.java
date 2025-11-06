@@ -289,7 +289,7 @@ public final class ToonTokener {
   }
 
   private HeaderLine parseHeaderText(String text, int lineNumber, int startColumn) {
-    int colonIndex = text.indexOf(':');
+    int colonIndex = findHeaderColonIndex(text);
     if (colonIndex < 0) {
       return null;
     }
@@ -308,6 +308,30 @@ public final class ToonTokener {
     }
     int inlineColumn = startColumn + colonIndex + 1 + offset;
     return new HeaderLine(header, inlineSegment, lineNumber, inlineColumn);
+  }
+
+  private static int findHeaderColonIndex(String text) {
+    boolean inQuotes = false;
+    boolean escaping = false;
+    for (int i = 0; i < text.length(); i++) {
+      char ch = text.charAt(i);
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (ch == '\\' && inQuotes) {
+        escaping = true;
+        continue;
+      }
+      if (ch == '"') {
+        inQuotes = !inQuotes;
+        continue;
+      }
+      if (ch == ':' && !inQuotes) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   private Header parseHeaderSegment(String headerText, int line, int startColumn) {
