@@ -153,18 +153,22 @@ public final class ToonTokener {
 
     while (index < lines.size()) {
       LineInfo line = peekLine();
-      if (line.indent < expectedIndent) {
-        break;
-      }
       if (line.trimmed.isEmpty()) {
         if (options.strict()) {
+          if (line.indent < expectedIndent) {
+            break;
+          }
           throw error(
               "Las líneas en blanco dentro de arrays no son válidas en modo estricto",
               line.lineNumber,
               line.indent + 1);
         }
         consumeLine();
+        // En modo no estricto, mantenga la posición del encabezado para elementos posteriores.
         continue;
+      }
+      if (line.indent < expectedIndent) {
+        break;
       }
 
       if (header.isTabular()) {
