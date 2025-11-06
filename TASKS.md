@@ -28,8 +28,8 @@ Este plan asume ejecución dentro de `./java` y sigue la arquitectura descrita e
    - Validar contra fixtures `tests/fixtures/decode`; crear tests parametrizados que lean los JSON de fixture.
 
 6. Encoder JSON → TOON
-   6.1 - Implementar `ToonEncoder` que acepte estructuras JSON genéricas (`Map`, `List`, `JsonNode`).
-   6.2 - Implementar `ToonWriter` y `ToonStringer` para manejar indentación, delimitadores y headers tabulares.
+   6.1 - Implementar `ToonEncoder` que acepte estructuras JSON genéricas (`Map`, `List`, `JsonNode`). (completado)
+   6.2 - Implementar `ToonWriter` y `ToonStringer` para manejar indentación, delimitadores y headers tabulares. (completado)
    6.3 - Crear test unitario  contra fixtures `src/test/resources/fixtures/encode`. usa ToonDecoderFixtureTest como referencia
    6.4 - preparacion de pruebas
       6.4.1 - crea carpeta src/test/resources/fixtures/draft_encode
