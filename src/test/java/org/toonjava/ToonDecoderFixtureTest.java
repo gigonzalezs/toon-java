@@ -22,13 +22,18 @@ class ToonDecoderFixtureTest {
   @ParameterizedTest(name = "{0}")
   @MethodSource("fixtureCases")
   void decodeFixtures(
-      String displayName, String input, JsonNode expected, boolean shouldError, boolean isObject) {
+      String displayName,
+      String input,
+      JsonNode expected,
+      boolean shouldError,
+      boolean isObject,
+      ToonDecoderOptions options) {
     if (shouldError) {
-      assertThrows(ToonException.class, () -> ToonDecoder.decode(input), displayName);
+      assertThrows(ToonException.class, () -> ToonDecoder.decode(input, options), displayName);
       return;
     }
 
-    Object decoded = ToonDecoder.decode(input);
+    Object decoded = ToonDecoder.decode(input, options);
     Object plain = ToonDecoder.toJavaValue(decoded);
     JsonNode actualNode = MAPPER.valueToTree(plain);
 
@@ -41,7 +46,7 @@ class ToonDecoderFixtureTest {
     assertEquals(expected, jsonNode, () -> describeMismatch(displayName, expected, jsonNode));
 
     if (isObject) {
-      JsonNode mapNode = MAPPER.valueToTree(ToonDecoder.decodeToMap(input));
+      JsonNode mapNode = MAPPER.valueToTree(ToonDecoder.decodeToMap(input, options));
       assertEquals(expected, mapNode, () -> describeMismatch(displayName, expected, mapNode));
     }
   }
@@ -77,7 +82,8 @@ class ToonDecoderFixtureTest {
     JsonNode expected = testNode.get("expected");
     boolean shouldError = testNode.path("shouldError").asBoolean(false);
     boolean isObject = expected != null && expected.isObject();
-    return Arguments.of(displayName, input, expected, shouldError, isObject);
+    ToonDecoderOptions options = parseOptions(testNode.get("options"));
+    return Arguments.of(displayName, input, expected, shouldError, isObject, options);
   }
 
   private static String describeMismatch(String displayName, JsonNode expected, Object actual) {
@@ -93,6 +99,20 @@ class ToonDecoderFixtureTest {
         + "("
         + actualType
         + ")";
+  }
+
+  private static ToonDecoderOptions parseOptions(JsonNode node) {
+    if (node == null || node.isNull()) {
+      return ToonDecoderOptions.defaults();
+    }
+    ToonDecoderOptions base = ToonDecoderOptions.defaults();
+    int indent =
+        node.path("indent").isNumber() ? node.path("indent").asInt(base.indent()) : base.indent();
+    boolean strict =
+        node.path("strict").isBoolean()
+            ? node.path("strict").asBoolean(base.strict())
+            : base.strict();
+    return new ToonDecoderOptions(indent, strict);
   }
 
   private ToonDecoderFixtureTest() {}
