@@ -5,8 +5,10 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -244,6 +246,7 @@ public final class ToonWriter {
     }
 
     List<String> columns = null;
+    Set<String> columnSet = null;
     for (int i = 0; i < array.size(); i++) {
       Object value = normalize(array.get(i));
       if (!(value instanceof ToonObject object)) {
@@ -254,9 +257,20 @@ public final class ToonWriter {
         keyList.add(key);
       }
       if (columns == null) {
-        columns = keyList;
-      } else if (!columns.equals(keyList)) {
-        return ArrayAnalysis.list();
+        columns = new ArrayList<>(keyList);
+        columnSet = new LinkedHashSet<>(columns);
+      } else {
+        if (columnSet == null) {
+          columnSet = new LinkedHashSet<>(columns);
+        }
+        if (keyList.size() != columnSet.size()) {
+          return ArrayAnalysis.list();
+        }
+        for (String key : keyList) {
+          if (!columnSet.contains(key)) {
+            return ArrayAnalysis.list();
+          }
+        }
       }
       for (String key : columns) {
         Object cell = object.opt(key);
@@ -378,10 +392,28 @@ public final class ToonWriter {
     if ("true".equals(value) || "false".equals(value) || "null".equals(value)) {
       return true;
     }
+    if (looksLikeNumberWithLeadingZero(value)) {
+      return true;
+    }
     if (NUMBER_PATTERN.matcher(value).matches()) {
       return true;
     }
     return false;
+  }
+
+  private boolean looksLikeNumberWithLeadingZero(String value) {
+    int index = 0;
+    if (index < value.length() && (value.charAt(index) == '-' || value.charAt(index) == '+')) {
+      index++;
+    }
+    if (index >= value.length()) {
+      return false;
+    }
+    if (value.charAt(index) != '0') {
+      return false;
+    }
+    int next = index + 1;
+    return next < value.length() && Character.isDigit(value.charAt(next));
   }
 
   private boolean containsControl(String value) {
