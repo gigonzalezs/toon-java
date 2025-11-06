@@ -5,8 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.toonjava.grammar.ToonLexer;
@@ -18,7 +16,6 @@ import org.toonjava.grammar.ToonParser;
  * y objetos multi-línea dentro de arrays.
  */
 public final class ToonTokener {
-  private static final Pattern KEY_VALUE_PATTERN = Pattern.compile("([^:]+):(.*)");
   private static final int INDENT_SIZE = 2;
 
   private final List<LineInfo> lines;
@@ -163,7 +160,7 @@ public final class ToonTokener {
       if (header.isTabular()) {
         if (line.indent == expectedIndent
             && line.trimmed.indexOf(header.delimiter) < 0
-            && KEY_VALUE_PATTERN.matcher(line.trimmed).matches()) {
+            && findColonOutsideQuotes(line.trimmed) >= 0) {
           break;
         }
         if (line.indent != expectedIndent) {
@@ -254,18 +251,29 @@ public final class ToonTokener {
   }
 
   private ParsedKeyValue parseKeyValue(String text, int line, int startColumn) {
-    Matcher matcher = KEY_VALUE_PATTERN.matcher(text);
-    if (!matcher.matches()) {
+    int colonIndex = findColonOutsideQuotes(text);
+    if (colonIndex < 0) {
       throw error("Se esperaba par clave:valor", line, startColumn);
     }
-    String keyToken = matcher.group(1).trim();
-    String valueSegment = matcher.group(2).trim();
-
-    int keyStartIndex = text.indexOf(keyToken);
-    int keyColumn = startColumn + keyStartIndex;
+    String keySegment = text.substring(0, colonIndex);
+    int keyLeading = 0;
+    while (keyLeading < keySegment.length()
+        && Character.isWhitespace(keySegment.charAt(keyLeading))) {
+      keyLeading++;
+    }
+    int keyTrailing = keySegment.length();
+    while (keyTrailing > keyLeading && Character.isWhitespace(keySegment.charAt(keyTrailing - 1))) {
+      keyTrailing--;
+    }
+    if (keyLeading == keyTrailing) {
+      throw error("Clave vacía en par clave:valor", line, startColumn + keyLeading);
+    }
+    String keyToken = keySegment.substring(keyLeading, keyTrailing);
+    int keyColumn = startColumn + keyLeading;
     String key = decodeKey(keyToken, line, keyColumn);
 
-    int colonIndex = text.indexOf(':');
+    String valueSegment = text.substring(colonIndex + 1).trim();
+
     int valueIndex = colonIndex + 1;
     while (valueIndex < text.length() && Character.isWhitespace(text.charAt(valueIndex))) {
       valueIndex++;
@@ -282,14 +290,18 @@ public final class ToonTokener {
   }
 
   private HeaderLine parseHeaderLine(LineInfo line) {
-    if (!line.trimmed.contains("[") || !line.trimmed.contains("]")) {
+    int colonIndex = findColonOutsideQuotes(line.trimmed);
+    if (colonIndex < 0) {
+      return null;
+    }
+    if (!containsBracketOutsideQuotes(line.trimmed, colonIndex)) {
       return null;
     }
     return parseHeaderText(line.trimmed, line.lineNumber, line.indent + 1);
   }
 
   private HeaderLine parseHeaderText(String text, int lineNumber, int startColumn) {
-    int colonIndex = findHeaderColonIndex(text);
+    int colonIndex = findColonOutsideQuotes(text);
     if (colonIndex < 0) {
       return null;
     }
@@ -310,7 +322,7 @@ public final class ToonTokener {
     return new HeaderLine(header, inlineSegment, lineNumber, inlineColumn);
   }
 
-  private static int findHeaderColonIndex(String text) {
+  private static int findColonOutsideQuotes(String text) {
     boolean inQuotes = false;
     boolean escaping = false;
     for (int i = 0; i < text.length(); i++) {
@@ -332,6 +344,42 @@ public final class ToonTokener {
       }
     }
     return -1;
+  }
+
+  private static boolean containsBracketOutsideQuotes(String text, int endExclusive) {
+    boolean inQuotes = false;
+    boolean escaping = false;
+    boolean openBracket = false;
+    boolean closeBracket = false;
+    int limit = Math.min(endExclusive, text.length());
+    for (int i = 0; i < limit; i++) {
+      char ch = text.charAt(i);
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (inQuotes) {
+        if (ch == '\\') {
+          escaping = true;
+        } else if (ch == '"') {
+          inQuotes = false;
+        }
+        continue;
+      }
+      if (ch == '"') {
+        inQuotes = true;
+        continue;
+      }
+      if (ch == '[') {
+        openBracket = true;
+      } else if (ch == ']') {
+        closeBracket = true;
+      }
+      if (openBracket && closeBracket) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private Header parseHeaderSegment(String headerText, int line, int startColumn) {
